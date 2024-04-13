@@ -1,18 +1,12 @@
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/types.h>
 #include <winsock2.h>
-#include <stdlib.h>
-#include <signal.h>
+#include <malloc.h>
 
 
 #pragma comment(lib, "ws2_32.lib") //Winsock Library
 
-#define NOT_FOUND_CONTENT       "<h1>404 Not Found</h1>\n"
-#define SERVER_ERROR_CONTENT    "<h1>500 Internal Server Error</h1>\n"
-#define SERVERPORT 8080
-#define BUFSIZE 400000
+#define BUFSIZE 100000
+#define BUFSIZE2 400000
 #define HEADER_FMT "HTTP/1.1 %d %s\r\nContent-Length: %ld\r\nContent-Type: %s\r\n\r\n"
 
 
@@ -25,9 +19,6 @@ void fill_header(char *header, int status, long len, char *type){
         case 404:
             strcpy(status_txt, "Not Found");
             break;
-        case 506:
-            strcpy(status_txt, "Unassigned");
-        break;
         case 500:
         default:
             strcpy(status_txt, "Internal Server Error");
@@ -37,16 +28,15 @@ void fill_header(char *header, int status, long len, char *type){
 }
 
 
-
 int main(int argc, char* argv[]) {
     WSADATA wsaData;
     int servsock;
     SOCKADDR_IN servaddr;
     char hello[] = "HTTP/1.1 200 OK\r\n"
     "Content-Type: text/html; charset=UTF-8\r\n\r\n"
-    "<doctype !html><html><head><title>Hello World</title></head>"
-    "<body><h1>Hello world! my name is rinrinrn</h1></body></html>\r\n";
-    char szBuff[BUFSIZE];
+    "<doctype !html><html lang=\"ko\"><head><title>Hello World</title><link rel=\"shortcut icon\" href=\"#\"></head>"
+    "<body><h1>Hello world!</h1></br>my name is seoyoung. this is my WebServer!</body></html>\r\n";
+    char szBuff[BUFSIZE2] = "\0";
 
 
 
@@ -105,21 +95,17 @@ int main(int argc, char* argv[]) {
     printf("socket() success\n");
 
 
-
-    // signal(SIGCHLD, SIG_IGN);
-
     // accept
     SOCKET clisock;
     struct sockaddr_in cliaddr;
     int addrlen = sizeof(struct sockaddr_in);
-    // FILE *index_html;
     int cli_len;
+    
+    // char header[BUFSIZE] = "\0";
 
-
-
-    char header[BUFSIZE];
     printf("\n++++Waiting for new connection ++++\n\n");
     while (1) {
+        // header[BUFSIZE] = 0;
         clisock = accept(servsock, (struct sockaddr *)&cliaddr, &addrlen);
         if (clisock == INVALID_SOCKET) {
             printf("Accept failed with error: %d\n", WSAGetLastError());
@@ -129,77 +115,84 @@ int main(int argc, char* argv[]) {
         }
         printf("client accept() success\n");
 
-        if(clisock == -1){
-            perror("Unable to accept conneciton.\n");
-            continue;
-        }
-
         printf("accepted connection from %s, port %d\n",
         inet_ntoa(cliaddr.sin_addr), htons(cliaddr.sin_port));
 
 
-        cli_len = recv(clisock, szBuff, sizeof(szBuff), 0);       
-        
-        char header2[BUFSIZE];
-        // FILE *html_file = fopen("index.html", "r");
+        cli_len = recv(clisock, szBuff, sizeof(szBuff), 0);
 
+        // 종료 조건 
+        if(cli_len == SOCKET_ERROR){
+            fprintf(stderr, "recv() failed with error %d\n", WSAGetLastError());
+            WSACleanup();
+            return -1;
+        }
+        if(clisock == 0){
+            printf("Client closed connection\n");
+            closesocket(clisock);
+            break; // 클라이언트가 연결을 닫으면 서버 종료
+        }
+
+        char header[BUFSIZE2] = "\0";
         if (strstr(szBuff, "GET /index.html") != NULL) {
             FILE *html_file = fopen("index.html", "r");
         
             if (!html_file) {
                 printf("Failed to open file\n");
-                fill_header(header2, cli_len, 0, "text/html");
-                send(clisock, header2, strlen(header2), 0);
+                fill_header(header, 200, 0, "text/html");
+                send(clisock, header, strlen(header), 0);
             } else {
                 fseek(html_file, 0, SEEK_END);
                 long content_length = ftell(html_file);
                 fseek(html_file, 0, SEEK_SET);
-
-                cli_len = send(clisock, header2, strlen(header2), 0);
-                fill_header(header2, cli_len, content_length, "text/html");
+                
+                fill_header(header, 200, content_length, "text/html");
+                cli_len = send(clisock, header, strlen(header), 0);
 
                 size_t bytes_read;
+                char chunk_header[30] = "\0";
                 while ((bytes_read = fread(szBuff, 1, sizeof(szBuff), html_file)) > 0) {
-                    cli_len = send(clisock, szBuff, bytes_read, 0);
+                    //cli_len = send(clisock, szBuff, bytes_read, 0);
+                    // 청크 헤더 작성
+                    sprintf(chunk_header, "%d\r\n", bytes_read);
+                    send(clisock, chunk_header, strlen(chunk_header), 0);
+                    
+                    // 청크 데이터 전송
+                    send(clisock, szBuff, bytes_read, 0);
+                    send(clisock, "\r\n", 1, 0);
                 }
-                // while (!feof(html_file)) {
-                //     size_t bytes_read = fread(szBuff, 1, sizeof(szBuff), html_file);
-                //     send(clisock, szBuff, bytes_read, 0);
-                // }
-                fclose(html_file);
+                // 마지막 청크 전송 (빈 청크)
+                send(clisock, "0\r\n\r\n", 5, 0);
+
             }
-            printf("\nheader: %s\n", header2);
+            fclose(html_file);
         }
-        else {
-            // size_t bytes_read = read(szBuff, 1, sizeof(szBuff), hello);
-            // cli_len = send(clisock, szBuff, bytes_read, 0);
-            cli_len = send(clisock, hello, sizeof(hello) - 1, 0);
-            fill_header(header, cli_len, sizeof(szBuff), "text/html");
-            printf("\nheader: %s\n", header);
+        else if(strstr(szBuff, "GET / ") != NULL) {
+            cli_len = send(clisock, hello, sizeof(hello), 0);
+            fill_header(header, 200, sizeof(szBuff), "text/html");
+        }
+        else if (strstr(szBuff, "GET /favicon.ico") != NULL) {
+            // Ignore favicon requests and send a 404 Not Found response
+            cli_len = 1;
+            fill_header(header, 404, 0, "text/html");
+            send(clisock, header, strlen(header), 0);
+        }
+        else{
+            cli_len = 1;
+            send(clisock, header, strlen(header), 0);
+            continue;
         }
 
         
-        printf("Bytes Received: %d, message: %s from %s\n", cli_len, szBuff, inet_ntoa(cliaddr.sin_addr));
+        printf("\nheader: %s\n", header);
+        printf("Bytes Received: %d, message: %s from %s\n\n", cli_len, szBuff, inet_ntoa(cliaddr.sin_addr));
+        // header[BUFSIZE] = "\0";
         
-        
-        
-        if(cli_len == 0){
-            printf("Client closed connection\n");
-            closesocket(clisock);
-            return -1;
-        }
-        else if(cli_len == SOCKET_ERROR){
+        if(cli_len == SOCKET_ERROR){
             fprintf(stderr, "recv() failed with error %d\n", WSAGetLastError());
             WSACleanup();
             return -1;
-        }
-
-        if(cli_len == 0){
-            printf("Client closed connection\n");
-            closesocket(clisock);
-            return -1;
-        }
-        
+        }        
 
         // Close client socket
         closesocket(clisock);
