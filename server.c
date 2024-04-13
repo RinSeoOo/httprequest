@@ -27,6 +27,14 @@ void fill_header(char *header, int status, long len, char *type){
     sprintf(header, HEADER_FMT, status, status_txt, len, type);
 }
 
+void delete_view_css() {
+    if (remove("view.css") == 0) {
+        printf("view.css deleted successfully\n");
+    } else {
+        printf("Unable to delete the file\n");
+    }
+}
+
 
 int main(int argc, char* argv[]) {
     WSADATA wsaData;
@@ -149,6 +157,8 @@ int main(int argc, char* argv[]) {
                 fill_header(header, 200, content_length, "text/html");
                 cli_len = send(clisock, header, strlen(header), 0);
 
+                
+
                 size_t bytes_read;
                 char chunk_header[30] = "\0";
                 while ((bytes_read = fread(szBuff, 1, sizeof(szBuff), html_file)) > 0) {
@@ -157,9 +167,13 @@ int main(int argc, char* argv[]) {
                     sprintf(chunk_header, "%d\r\n", bytes_read);
                     send(clisock, chunk_header, strlen(chunk_header), 0);
                     
+
                     // 청크 데이터 전송
                     send(clisock, szBuff, bytes_read, 0);
                     send(clisock, "\r\n", 1, 0);
+
+                    // Delete view.css if it exists
+                    delete_view_css();
                 }
                 // 마지막 청크 전송 (빈 청크)
                 send(clisock, "0\r\n\r\n", 5, 0);
