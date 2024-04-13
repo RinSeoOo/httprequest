@@ -84,7 +84,7 @@ recv: client로 데이터를 보낼 준비를 합니다.
 send: client socket으로 미리 입력한 데이터(hello)를 보냅니다.
 
 
-  ![webserver get success](./webserver get success.jpg)
+  ![webserverGetSuccess](./webserverGetSuccess.jpg)
 
   만약 웹으로 잘 보내졌다면, HTTP 성공 메세지와 함께 정보를 보여줍니다.
 
@@ -104,7 +104,7 @@ index.html이 만약 존재하고 요청했다면, 파일을 읽도록 합니다
 
 5. (-3) 추가 요청
 
-![추가 cli_len](./추가 cli_len.jpg)
+![ADDcli_len](./ADDcli_len.jpg)
 
 webserver에서 새로고침을 하지 않아도 끊임없이 요청되어 확인해보니, '''GET /favicon.ico''' 로 정보가 수정되어 출력되어 이를 없애기 위해 if문을 추가로 사용했고, 위의 요청을 수정해도 똑같은 오류가 발생하여 만약 요청을 받지 않는다면, 아무것도 받지 않고 되돌아가도록 수정하였습니다.
 
